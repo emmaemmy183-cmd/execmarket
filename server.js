@@ -63,7 +63,26 @@ function mustEnv(name) {
   if (!process.env[name]) throw new Error(`Missing ${name} in .env`);
   return process.env[name];
 }
+function normalizeCallbackUrl(raw) {
+  if (!raw) return raw;
 
+  let s = String(raw).trim();
+
+  // If someone accidentally saved it without protocol, force https
+  if (!/^https?:\/\//i.test(s)) {
+    s = "https://" + s.replace(/^\/+/, "");
+  }
+
+  // If it somehow got duplicated, keep only the correct endpoint
+  // (always end at /auth/discord/callback)
+  const idx = s.indexOf("/auth/discord/callback");
+  if (idx !== -1) {
+    const u = new URL(s);
+    return `${u.origin}/auth/discord/callback`;
+  }
+
+  return s;
+}
 async function discordBotFetch(url) {
   const token = mustEnv("DISCORD_BOT_TOKEN");
   const res = await fetch(`https://discord.com/api/v10${url}`, {
@@ -218,12 +237,15 @@ app.use(async (req, res, next) => {
 // --------------------
 // Passport Discord (login only needs identify)
 // --------------------
+console.log("[OAuth] DISCORD_CALLBACK_URL =", process.env.DISCORD_CALLBACK_URL);
+console.log("[OAuth] normalized callback =", normalizeCallbackUrl(process.env.DISCORD_CALLBACK_URL));
+
 passport.use(
   new DiscordStrategy(
     {
       clientID: process.env.DISCORD_CLIENT_ID,
       clientSecret: process.env.DISCORD_CLIENT_SECRET,
-      callbackURL: process.env.DISCORD_CALLBACK_URL,
+      callbackURL: normalizeCallbackUrl(process.env.DISCORD_CALLBACK_URL),
       scope: ["identify"],
     },
     async (accessToken, refreshToken, profile, done) => {
@@ -451,4 +473,5 @@ app.post("/admin/roles/delete", requireAuth, requireAdmin, async (req, res) => {
 // --------------------
 const port = Number(process.env.PORT || 3000);
 app.listen(port, () => console.log(`ExecMarket Forum running on http://localhost:${port}`));
+
 
