@@ -1,0 +1,45 @@
+<%- include("partials/start", { title: cat.name }) %>
+
+<section class="row cardAnim">
+  <div>
+    <h2><%= cat.name %></h2>
+    <p class="muted"><%= cat.description || "" %></p>
+  </div>
+  <div class="rowRight">
+    <% if (me) { %>
+      <a class="btn" href="/new/<%= encodeURIComponent(cat.key) %>">New post</a>
+    <% } else { %>
+      <a class="btn" href="/auth/discord">Login to post</a>
+    <% } %>
+  </div>
+</section>
+
+<section class="list">
+  <% if (!posts || posts.length === 0) { %>
+    <div class="empty cardAnim">No posts yet. Want to start one?</div>
+  <% } %>
+
+  <% (posts || []).forEach(p => { %>
+    <a class="postItem lift cardAnim" href="/p/<%= p.id %>">
+      <div class="postTop">
+        <div class="postTitle"><%= p.title %></div>
+        <div class="badges">
+          <% if (p.badges && p.badges.length) { %>
+            <% p.badges.slice(0,2).forEach(b => { %>
+              <span class="badge role <%= b.style %>"><%= b.label %></span>
+            <% }) %>
+          <% } else { %>
+            <span class="badge role neutral">Member</span>
+          <% } %>
+        </div>
+      </div>
+      <div class="postMeta">
+        <span class="muted">@<%= p.username %></span>
+        <span class="dot">•</span>
+        <span class="muted"><%= new Date(p.created_at * 1000).toLocaleString() %></span>
+      </div>
+    </a>
+  <% }) %>
+</section>
+
+<%- include("partials/end") %>

@@ -1,0 +1,53 @@
+<%- include("partials/start", { title: "Role Labels" }) %>
+
+<section class="row cardAnim">
+  <div>
+    <h2>Role Labels</h2>
+    <p class="muted">Optional: override a role name or style (if you want cleaner badges).</p>
+  </div>
+  <div class="rowRight">
+    <a class="btn ghost" href="/admin">Back</a>
+  </div>
+</section>
+
+<form class="form cardAnim" method="POST" action="/admin/roles/upsert">
+  <label>Discord Role ID</label>
+  <input name="role_id" placeholder="Paste role ID..." required />
+
+  <label>Label</label>
+  <input name="label" placeholder="Example: Verified Seller" required />
+
+  <label>Style</label>
+  <select name="style">
+    <option value="neutral">Neutral</option>
+    <option value="owner">Owner</option>
+    <option value="admin">Admin</option>
+    <option value="mod">Moderator</option>
+    <option value="verified">Verified</option>
+    <option value="seller">Seller</option>
+  </select>
+
+  <button class="btn" type="submit">Save</button>
+</form>
+
+<section class="list">
+  <% if (!labels || labels.length === 0) { %>
+    <div class="empty cardAnim">No overrides yet.</div>
+  <% } %>
+
+  <% (labels || []).forEach(l => { %>
+    <div class="postItem cardAnim" style="cursor:default">
+      <div class="postTop">
+        <div class="postTitle"><%= l.label %></div>
+        <span class="badge role <%= l.style %>"><%= l.style %></span>
+      </div>
+      <div class="postMeta"><span class="muted"><%= l.role_id %></span></div>
+      <form class="inline" method="POST" action="/admin/roles/delete" style="margin-top:10px">
+        <input type="hidden" name="role_id" value="<%= l.role_id %>" />
+        <button class="btn ghost" type="submit">Delete</button>
+      </form>
+    </div>
+  <% }) %>
+</section>
+
+<%- include("partials/end") %>

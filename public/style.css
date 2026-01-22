@@ -1,0 +1,346 @@
+:root{
+  --bg:#070b14;
+  --panel:rgba(17,24,39,.55);
+  --panel2:rgba(15,23,42,.55);
+  --text:#e5e7eb;
+  --muted:#9aa7bd;
+  --border:rgba(255,255,255,.10);
+  --accent:#7c3aed;
+  --accent2:#2563eb;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x:hidden;
+}
+
+.bgGlow{
+  position:fixed;
+  inset:-200px;
+  background:
+    radial-gradient(900px 500px at 10% 0%, rgba(124,58,237,.28), transparent 60%),
+    radial-gradient(900px 500px at 90% 30%, rgba(37,99,235,.22), transparent 60%),
+    radial-gradient(700px 420px at 40% 100%, rgba(34,197,94,.10), transparent 55%);
+  filter: blur(18px);
+  z-index:-1;
+}
+
+a{color:inherit;text-decoration:none}
+.container{max-width:1100px;margin:0 auto;padding:22px}
+
+.topbar{
+  position:sticky;top:0;
+  display:flex;justify-content:space-between;align-items:center;
+  gap:16px;
+  padding:14px 18px;
+  border-bottom:1px solid var(--border);
+  background: rgba(7,11,20,.55);
+  backdrop-filter: blur(12px);
+  animation: slideDown .55s ease both;
+}
+
+@keyframes slideDown{
+  from{transform:translateY(-10px);opacity:0}
+  to{transform:translateY(0);opacity:1}
+}
+
+.brand{display:flex;align-items:center;gap:12px}
+.logo{
+  width:40px;height:40px;border-radius:14px;
+  display:grid;place-items:center;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  font-weight:900;
+  box-shadow: 0 14px 45px rgba(124,58,237,.18);
+}
+
+.brandText .name{font-weight:900;letter-spacing:.2px}
+.brandText .tag{font-size:12px;color:var(--muted);margin-top:2px}
+
+.nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.navlink{
+  padding:8px 10px;border-radius:12px;
+  color:var(--muted);
+  transition:.18s ease;
+}
+.navlink:hover{background: rgba(255,255,255,.06);color:var(--text)}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:9px 12px;border-radius:14px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border:1px solid rgba(255,255,255,.14);
+  font-weight:800;
+  transition:.18s ease;
+  position:relative;
+  overflow:hidden;
+}
+.btn::after{
+  content:"";
+  position:absolute;inset:-60px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent);
+  transform: translateX(-60%);
+  transition: .45s ease;
+}
+.btn:hover::after{transform: translateX(60%)}
+.btn:hover{filter:brightness(1.06); transform: translateY(-1px)}
+.btn:active{transform: translateY(0px) scale(.99)}
+.btn.big{padding:12px 16px;border-radius:16px}
+.btn.ghost{background: transparent;border:1px solid var(--border)}
+
+.mechip{
+  display:flex;gap:10px;align-items:center;
+  padding:8px 10px;border-radius:16px;
+  border:1px solid var(--border);
+  background: rgba(17,24,39,.45);
+  transition:.18s ease;
+}
+.mechip:hover{transform: translateY(-1px)}
+.avatar{width:36px;height:36px;border-radius:14px}
+.meuser{font-weight:900}
+.muted{color:var(--muted)}
+.dot{margin:0 6px;color:rgba(255,255,255,.22)}
+
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.badge{
+  display:inline-flex;
+  padding:4px 9px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  font-weight:900;
+  letter-spacing:.2px;
+  animation: pop .35s ease both;
+}
+@keyframes pop{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+
+.role.owner{background: rgba(251,191,36,.14)}
+.role.admin{background: rgba(239,68,68,.14)}
+.role.mod{background: rgba(59,130,246,.14)}
+.role.verified{background: rgba(34,197,94,.14)}
+.role.seller{background: rgba(236,72,153,.14)}
+.role.neutral{background: rgba(148,163,184,.10)}
+
+.hero{
+  padding:18px;
+  border:1px solid var(--border);
+  border-radius:22px;
+  background: var(--panel);
+  box-shadow: 0 20px 70px rgba(0,0,0,.35);
+}
+.hero h1{margin:0 0 6px 0;font-size:34px}
+.sub{margin:0 0 12px 0;color:var(--muted);line-height:1.4}
+.hint{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:16px;
+  border:1px dashed rgba(255,255,255,.18);
+  color:rgba(229,231,235,.92);
+}
+
+.grid{
+  margin-top:16px;
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+@media (max-width: 720px){ .grid{grid-template-columns: 1fr;} }
+
+.card{
+  padding:16px;
+  border-radius:20px;
+  border:1px solid var(--border);
+  background: var(--panel2);
+  box-shadow: 0 18px 60px rgba(0,0,0,.28);
+  transition: .18s ease;
+}
+.cardTitle{font-weight:950;font-size:18px}
+.cardDesc{margin-top:7px;color:var(--muted);line-height:1.35}
+.lift:hover{transform: translateY(-2px); border-color: rgba(255,255,255,.18)}
+
+.row{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin-bottom:14px}
+.rowRight{display:flex;gap:10px;align-items:center}
+
+.list{display:flex;flex-direction:column;gap:10px}
+.postItem{
+  padding:16px;
+  border-radius:20px;
+  border:1px solid var(--border);
+  background: rgba(17,24,39,.42);
+  transition:.18s ease;
+}
+.postTop{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.postTitle{font-weight:950}
+.postMeta{margin-top:8px;font-size:13px;color:var(--muted)}
+
+.form{
+  display:flex;flex-direction:column;gap:10px;
+  padding:16px;border-radius:22px;border:1px solid var(--border);
+  background: rgba(17,24,39,.42);
+}
+input, textarea, select{
+  padding:11px 12px;border-radius:16px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(15,23,42,.72);
+  color: var(--text);
+  outline:none;
+  transition:.18s ease;
+}
+input:focus, textarea:focus, select:focus{
+  border-color: rgba(124,58,237,.5);
+  box-shadow: 0 0 0 4px rgba(124,58,237,.15);
+}
+label{font-size:13px;color:var(--muted);font-weight:900}
+textarea{resize: vertical}
+
+.postHeader .crumbs{color:var(--muted);font-size:13px}
+.authorLine{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+
+.contentBox{
+  margin-top:10px;
+  padding:14px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(15,23,42,.55);
+  line-height:1.55;
+}
+
+.replies{margin-top:18px}
+.reply{margin-top:10px}
+.replyHead{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+
+.empty{
+  padding:16px;
+  border-radius:20px;
+  border:1px dashed rgba(255,255,255,.16);
+  color:var(--muted);
+  background: rgba(15,23,42,.35);
+}
+
+.pageEnter{animation: fadeUp .45s ease both}
+.cardAnim{animation: fadeUp .55s ease both}
+
+@keyframes fadeUp{
+  from{opacity:0; transform: translateY(10px)}
+  to{opacity:1; transform: translateY(0)}
+}
+/* ===== Full-screen app layout ===== */
+.appMain{
+  min-height: calc(100vh - 72px);
+}
+
+.container.full{
+  max-width: none;
+  width: 100%;
+  padding-left: 28px;
+  padding-right: 28px;
+}
+
+.appGrid{
+  display: grid;
+  grid-template-columns: minmax(520px, 1.6fr) minmax(340px, 0.9fr);
+  gap: 24px;
+  align-items: start;
+}
+
+/* Make the right side sticky like a real app */
+.sideCol{
+  position: relative;
+}
+.sideCard{
+  position: sticky;
+  top: 92px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: rgba(17,24,39,.42);
+  box-shadow: 0 18px 60px rgba(0,0,0,.28);
+}
+.sideTitle{
+  font-weight: 950;
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+.sideSub{
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  margin-bottom: 12px;
+}
+
+/* On smaller screens stack into one column */
+@media (max-width: 980px){
+  .appGrid{
+    grid-template-columns: 1fr;
+  }
+  .sideCard{
+    position: static;
+  }
+  .container.full{
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+}
+/* ===== Full-screen app layout ===== */
+.appMain{
+  min-height: calc(100vh - 72px);
+}
+
+.container.full{
+  max-width: none;
+  width: 100%;
+  padding-left: 28px;
+  padding-right: 28px;
+}
+
+.appGrid{
+  display: grid;
+  grid-template-columns: minmax(520px, 1.6fr) minmax(340px, 0.9fr);
+  gap: 24px;
+  align-items: start;
+}
+
+/* Make the right side sticky like a real app */
+.sideCol{
+  position: relative;
+}
+.sideCard{
+  position: sticky;
+  top: 92px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: rgba(17,24,39,.42);
+  box-shadow: 0 18px 60px rgba(0,0,0,.28);
+}
+.sideTitle{
+  font-weight: 950;
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+.sideSub{
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  margin-bottom: 12px;
+}
+
+/* On smaller screens stack into one column */
+@media (max-width: 980px){
+  .appGrid{
+    grid-template-columns: 1fr;
+  }
+  .sideCard{
+    position: static;
+  }
+  .container.full{
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+}

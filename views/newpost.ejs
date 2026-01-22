@@ -1,0 +1,20 @@
+<%- include("partials/start", { title: "New post" }) %>
+
+<section class="row cardAnim">
+  <div>
+    <h2>New post in <%= cat.name %></h2>
+    <p class="muted">A clear title + a short explanation is perfect.</p>
+  </div>
+</section>
+
+<form class="form cardAnim" method="POST" action="/new/<%= encodeURIComponent(cat.key) %>">
+  <label>Title</label>
+  <input name="title" maxlength="120" placeholder="What’s this about?" required />
+
+  <label>Message</label>
+  <textarea name="body" rows="10" placeholder="Tell us what happened / what you need..." required></textarea>
+
+  <button class="btn big" type="submit">Post</button>
+</form>
+
+<%- include("partials/end") %>

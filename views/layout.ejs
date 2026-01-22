@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title><%= title || "ExecMarket Forum" %></title>
+  <link rel="stylesheet" href="/public/style.css" />
+</head>
+<body>
+
+  <div class="bgGlow"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">EM</div>
+      <div class="brandText">
+        <div class="name">ExecMarket</div>
+        <div class="tag">A simple place for feedback, ideas, and support</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <a class="navlink" href="/">Home</a>
+
+      <% if (me) { %>
+        <% if (canAdmin) { %>
+          <a class="navlink" href="/admin">Admin</a>
+        <% } %>
+
+        <a class="btn ghost" href="/logout">Logout</a>
+
+        <div class="mechip">
+          <img class="avatar" src="<%= avatarUrl(me) %>" alt="avatar" />
+          <div class="meinfo">
+            <div class="meuser">
+              <%= me.username %><span class="muted">#<%= me.discriminator || "0000" %></span>
+            </div>
+            <div class="badges">
+              <% if ((myBadges || []).length) { %>
+                <% (myBadges || []).slice(0,4).forEach(b => { %>
+                  <span class="badge role <%= b.style %>"><%= b.label %></span>
+                <% }) %>
+              <% } else { %>
+                <span class="badge role neutral">Member</span>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      <% } else { %>
+        <a class="btn" href="/auth/discord">Login with Discord</a>
+      <% } %>
+    </nav>
+  </header>
+
+  <main class="container pageEnter">
+    <%- body %>
+  </main>
+
+  <script src="/public/app.js"></script>
+</body>
+</html>

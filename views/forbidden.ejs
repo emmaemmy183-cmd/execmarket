@@ -1,0 +1,9 @@
+<%- include("partials/start", { title: title || "Access denied" }) %>
+
+<section class="hero cardAnim">
+  <h1><%= title || "Access denied" %></h1>
+  <p class="sub"><%= message || "You don’t have permission to view this page." %></p>
+  <a class="btn big" href="/">Go back</a>
+</section>
+
+<%- include("partials/end") %>

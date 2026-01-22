@@ -1,0 +1,37 @@
+<%- include("partials/start", { title: "Admin Access" }) %>
+
+<section class="row cardAnim">
+  <div>
+    <h2>Admin Access</h2>
+    <p class="muted">Only users with these Discord roles can open the admin panel.</p>
+  </div>
+  <div class="rowRight">
+    <a class="btn ghost" href="/admin">Back</a>
+  </div>
+</section>
+
+<form class="form cardAnim" method="POST" action="/admin/access/add">
+  <label>Discord Role ID</label>
+  <input name="role_id" placeholder="Paste role ID..." required />
+  <button class="btn" type="submit">Add</button>
+</form>
+
+<section class="list">
+  <% if (!roles || roles.length === 0) { %>
+    <div class="empty cardAnim">No admin roles added yet.</div>
+  <% } %>
+
+  <% (roles || []).forEach(r => { %>
+    <div class="postItem cardAnim" style="cursor:default">
+      <div class="postTop">
+        <div class="postTitle"><%= r.role_id %></div>
+        <form method="POST" action="/admin/access/remove">
+          <input type="hidden" name="role_id" value="<%= r.role_id %>" />
+          <button class="btn ghost" type="submit">Remove</button>
+        </form>
+      </div>
+    </div>
+  <% }) %>
+</section>
+
+<%- include("partials/end") %>

@@ -1,0 +1,26 @@
+<%- include("partials/start", { title: "ExecMarket Forum", containerClass: "container" }) %>
+
+<section class="hero cardAnim">
+  <h1>ExecMarket Forum</h1>
+  <p class="sub">Here are our categories. Just write in it and we'll respond you as soon as we can.</p>
+
+  <% if (me) { %>
+    <div class="hint">You’re logged in. Pick a section and post whenever you’re ready.</div>
+  <% } else { %>
+    <div class="hint">To post or reply, just login with Discord.</div>
+    <a class="btn big" href="/auth/discord">Continue with Discord</a>
+  <% } %>
+</section>
+
+<% if (!loginOnly) { %>
+  <section class="grid">
+    <% (categories || []).forEach(c => { %>
+      <a class="card lift cardAnim" href="/c/<%= encodeURIComponent(c.key) %>">
+        <div class="cardTitle"><%= c.name %></div>
+        <div class="cardDesc"><%= c.description || "" %></div>
+      </a>
+    <% }) %>
+  </section>
+<% } %>
+
+<%- include("partials/end") %>
