@@ -1,89 +1,76 @@
 <%- include("partials/start", { title: post.title, containerClass: "container full" }) %>
 
-<div class="appGrid">
-  <!-- LEFT: post + replies list -->
-  <div class="mainCol">
+<script>
+  document.body.dataset.postId = "<%= post.id %>";
+</script>
 
-    <section class="postHeader cardAnim">
-      <div class="crumbs">
-        <a href="/">Home</a>
-        <span class="dot">•</span>
-        <a href="/c/<%= encodeURIComponent(post.category_key) %>"><%= post.category_name %></a>
-      </div>
-
-      <h2><%= post.title %></h2>
-
-      <div class="authorLine">
-        <span class="muted">@<%= post.username %></span>
-        <span class="dot">•</span>
-        <span class="muted"><%= new Date(post.created_at * 1000).toLocaleString() %></span>
-        <span class="dot">•</span>
-
-        <span class="badges">
-          <% if (post.badges && post.badges.length) { %>
-            <% post.badges.slice(0,3).forEach(b => { %>
-              <span class="badge role <%= b.style %>"><%= b.label %></span>
-            <% }) %>
-          <% } else { %>
-            <span class="badge role neutral">Member</span>
-          <% } %>
-        </span>
-      </div>
-
-      <article class="contentBox"><%= post.body %></article>
-    </section>
-
-    <section id="replies" class="replies">
-      <h3 class="cardAnim">Replies</h3>
-
-      <% if (!replies || replies.length === 0) { %>
-        <div class="empty cardAnim">No replies yet. You can be the first one.</div>
-      <% } %>
-
-      <% (replies || []).forEach(r => { %>
-        <div class="reply cardAnim">
-          <div class="replyHead">
-            <span class="muted">@<%= r.username %></span>
-            <span class="dot">•</span>
-            <span class="muted"><%= new Date(r.created_at * 1000).toLocaleString() %></span>
-            <span class="dot">•</span>
-
-            <span class="badges">
-              <% if (r.badges && r.badges.length) { %>
-                <% r.badges.slice(0,3).forEach(b => { %>
-                  <span class="badge role <%= b.style %>"><%= b.label %></span>
-                <% }) %>
-              <% } else { %>
-                <span class="badge role neutral">Member</span>
-              <% } %>
-            </span>
-          </div>
-
-          <div class="contentBox"><%= r.body %></div>
-        </div>
-      <% }) %>
-    </section>
-
+<section class="postHeader cardAnim">
+  <div class="crumbs">
+    <a href="/">Home</a>
+    <span class="dot">•</span>
+    <a href="/c/<%= encodeURIComponent(post.category_key) %>"><%= post.category_name %></a>
   </div>
 
-  <!-- RIGHT: sticky reply box -->
-  <aside class="sideCol">
-    <div class="sideCard cardAnim">
-      <div class="sideTitle">Reply</div>
-      <div class="sideSub">Keep it short and clear. You can always add more later.</div>
+  <h2><%= post.title %></h2>
 
-      <% if (me) { %>
-        <form class="form" method="POST" action="/reply/<%= post.id %>">
-          <label>Your reply</label>
-          <textarea name="body" rows="7" placeholder="Write your reply..." required></textarea>
-          <button class="btn big" type="submit">Send reply</button>
-        </form>
+  <div class="authorLine">
+    <span class="muted">@<%= post.username %></span>
+    <span class="dot">•</span>
+    <span class="muted"><%= new Date(post.created_at * 1000).toLocaleString() %></span>
+    <span class="dot">•</span>
+    <span class="badges">
+      <% if (post.badges && post.badges.length) { %>
+        <% post.badges.slice(0,3).forEach(b => { %>
+          <span class="badge role <%= b.style %>"><%= b.label %></span>
+        <% }) %>
       <% } else { %>
-        <div class="hint">Login to reply.</div>
-        <a class="btn big" href="/auth/discord">Login with Discord</a>
+        <span class="badge role neutral">Member</span>
       <% } %>
-    </div>
-  </aside>
-</div>
+    </span>
+  </div>
+
+  <article class="contentBox"><%= post.body %></article>
+</section>
+
+<section id="replies" class="replies">
+  <h3 class="cardAnim">Replies</h3>
+
+  <div id="liveReplies">
+    <% if (!replies || replies.length === 0) { %>
+      <div class="empty cardAnim">No replies yet. You can be the first one.</div>
+    <% } %>
+
+    <% (replies || []).forEach(r => { %>
+      <div class="reply cardAnim">
+        <div class="replyHead">
+          <span class="muted">@<%= r.username %></span>
+          <span class="dot">•</span>
+          <span class="muted"><%= new Date(r.created_at * 1000).toLocaleString() %></span>
+          <span class="dot">•</span>
+          <span class="badges">
+            <% if (r.badges && r.badges.length) { %>
+              <% r.badges.slice(0,3).forEach(b => { %>
+                <span class="badge role <%= b.style %>"><%= b.label %></span>
+              <% }) %>
+            <% } else { %>
+              <span class="badge role neutral">Member</span>
+            <% } %>
+          </span>
+        </div>
+        <div class="contentBox"><%= r.body %></div>
+      </div>
+    <% }) %>
+  </div>
+
+  <% if (me) { %>
+    <form class="form cardAnim" method="POST" action="/reply/<%= post.id %>">
+      <label>Your reply</label>
+      <textarea name="body" rows="5" placeholder="Write your reply..." required></textarea>
+      <button class="btn" type="submit">Reply</button>
+    </form>
+  <% } else { %>
+    <a class="btn big cardAnim" href="/auth/discord">Login to reply</a>
+  <% } %>
+</section>
 
 <%- include("partials/end") %>
