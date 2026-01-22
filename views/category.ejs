@@ -1,4 +1,9 @@
-<%- include("partials/start", { title: cat.name }) %>
+// new one
+<%- include("partials/start", { title: cat.name, containerClass: "container" }) %>
+
+<script>
+  document.body.dataset.categoryKey = "<%= cat.key %>";
+</script>
 
 <section class="row cardAnim">
   <div>
@@ -14,7 +19,7 @@
   </div>
 </section>
 
-<section class="list">
+<section class="list" id="livePosts">
   <% if (!posts || posts.length === 0) { %>
     <div class="empty cardAnim">No posts yet. Want to start one?</div>
   <% } %>
@@ -33,6 +38,7 @@
           <% } %>
         </div>
       </div>
+
       <div class="postMeta">
         <span class="muted">@<%= p.username %></span>
         <span class="dot">•</span>
