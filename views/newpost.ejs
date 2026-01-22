@@ -4,6 +4,12 @@
   <div>
     <h2>New post in <%= cat.name %></h2>
     <p class="muted">A clear title + a short explanation is perfect.</p>
+
+    <% if (typeof cooldownRemaining !== "undefined" && cooldownRemaining > 0) { %>
+      <p class="muted" id="cooldownText" style="margin-top:8px;">
+        Cooldown active: you can post again in <b><span id="cooldownSeconds"><%= cooldownRemaining %></span>s</b>.
+      </p>
+    <% } %>
   </div>
 </section>
 
@@ -14,7 +20,39 @@
   <label>Message</label>
   <textarea name="body" rows="10" placeholder="Tell us what happened / what you need..." required></textarea>
 
-  <button class="btn big" type="submit">Post</button>
+  <button class="btn big" id="postBtn" type="submit">Post</button>
 </form>
+
+<script>
+(() => {
+  const remaining = Number("<%= Number(cooldownRemaining || 0) %>");
+  const btn = document.getElementById("postBtn");
+  const secEl = document.getElementById("cooldownSeconds");
+  const textEl = document.getElementById("cooldownText");
+
+  if (!btn) return;
+  if (!remaining || remaining <= 0) return;
+
+  btn.disabled = true;
+  btn.style.opacity = "0.6";
+  btn.style.cursor = "not-allowed";
+
+  let t = remaining;
+  const tick = () => {
+    t = Math.max(0, t - 1);
+    if (secEl) secEl.textContent = String(t);
+
+    if (t <= 0) {
+      btn.disabled = false;
+      btn.style.opacity = "";
+      btn.style.cursor = "";
+      if (textEl) textEl.remove();
+      clearInterval(iv);
+    }
+  };
+
+  const iv = setInterval(tick, 1000);
+})();
+</script>
 
 <%- include("partials/end") %>
