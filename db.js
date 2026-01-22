@@ -13,6 +13,9 @@ db.serialize(() => {
     )
   `);
 
+  // --- migrations (safe, ignore errors if column already exists) ---
+  db.run(`ALTER TABLE users ADD COLUMN last_post_at INTEGER NOT NULL DEFAULT 0`, () => {});
+
   db.run(`
     CREATE TABLE IF NOT EXISTS user_roles (
       user_id TEXT NOT NULL,
@@ -21,7 +24,6 @@ db.serialize(() => {
     )
   `);
 
-  // Optional: override name/style for a role id (if you want custom labels)
   db.run(`
     CREATE TABLE IF NOT EXISTS role_labels (
       role_id TEXT PRIMARY KEY,
@@ -30,7 +32,6 @@ db.serialize(() => {
     )
   `);
 
-  // Role IDs allowed to access /admin
   db.run(`
     CREATE TABLE IF NOT EXISTS admin_access_roles (
       role_id TEXT PRIMARY KEY
@@ -57,6 +58,11 @@ db.serialize(() => {
       created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
     )
   `);
+
+  // --- migrations for post closing ---
+  db.run(`ALTER TABLE posts ADD COLUMN is_closed INTEGER NOT NULL DEFAULT 0`, () => {});
+  db.run(`ALTER TABLE posts ADD COLUMN closed_at INTEGER`, () => {});
+  db.run(`ALTER TABLE posts ADD COLUMN closed_by TEXT`, () => {});
 
   db.run(`
     CREATE TABLE IF NOT EXISTS replies (
