@@ -1,4 +1,4 @@
-// server.js
+// server.js new
 require("dotenv").config();
 
 const path = require("path");
@@ -8,6 +8,10 @@ const passport = require("passport");
 const DiscordStrategy = require("passport-discord").Strategy;
 const helmet = require("helmet");
 const db = require("./db");
+
+// ✅ NEW: http server + socket.io
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
 
@@ -33,6 +37,25 @@ app.use(
 
 app.use(passport.initialize());
 app.use(passport.session());
+
+// --------------------
+// ✅ Socket.IO setup
+// --------------------
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: true, credentials: true },
+});
+
+io.on("connection", (socket) => {
+  socket.on("join:category", (key) => {
+    if (typeof key === "string" && key.length < 100) socket.join(`category:${key}`);
+  });
+
+  socket.on("join:post", (postId) => {
+    const s = String(postId || "");
+    if (s.length && s.length < 50) socket.join(`post:${s}`);
+  });
+});
 
 // --------------------
 // SQLite helpers
@@ -63,26 +86,7 @@ function mustEnv(name) {
   if (!process.env[name]) throw new Error(`Missing ${name} in .env`);
   return process.env[name];
 }
-function normalizeCallbackUrl(raw) {
-  if (!raw) return raw;
 
-  let s = String(raw).trim();
-
-  // If someone accidentally saved it without protocol, force https
-  if (!/^https?:\/\//i.test(s)) {
-    s = "https://" + s.replace(/^\/+/, "");
-  }
-
-  // If it somehow got duplicated, keep only the correct endpoint
-  // (always end at /auth/discord/callback)
-  const idx = s.indexOf("/auth/discord/callback");
-  if (idx !== -1) {
-    const u = new URL(s);
-    return `${u.origin}/auth/discord/callback`;
-  }
-
-  return s;
-}
 async function discordBotFetch(url) {
   const token = mustEnv("DISCORD_BOT_TOKEN");
   const res = await fetch(`https://discord.com/api/v10${url}`, {
@@ -120,12 +124,11 @@ const lastSync = new Map();
 async function syncUserRolesFromDiscord(userId) {
   const now = Date.now();
   const last = lastSync.get(userId) || 0;
-  if (now - last < 10_000) return; // throttle
+  if (now - last < 10_000) return;
   lastSync.set(userId, now);
 
   const roleIds = await fetchMemberRoleIds(userId);
 
-  // Replace roles in DB (simple + reliable)
   await dbRun(`DELETE FROM user_roles WHERE user_id = ?`, [userId]);
   for (const rid of roleIds) {
     await dbRun(`INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)`, [userId, rid]);
@@ -181,11 +184,9 @@ function guessStyleFromName(name) {
 }
 
 async function getUserBadges(userId) {
-  // user role ids
   const roleRows = await dbAll(`SELECT role_id FROM user_roles WHERE user_id = ?`, [userId]);
   const roleIds = (roleRows || []).map(r => r.role_id);
 
-  // optional custom label/style overrides
   const overrides = await dbAll(`SELECT role_id, label, style FROM role_labels`, []);
   const overrideMap = new Map(overrides.map(o => [o.role_id, o]));
 
@@ -198,18 +199,16 @@ async function getUserBadges(userId) {
       badges.push({ role_id: rid, label: ov.label, style: ov.style || "neutral" });
       continue;
     }
-
     const name = roleCache.map.get(rid);
-    if (!name) continue; // unknown role or cache not ready
+    if (!name) continue;
     badges.push({ role_id: rid, label: name, style: guessStyleFromName(name) });
   }
 
-  // Stable ordering
   badges.sort((a, b) => a.label.localeCompare(b.label));
   return badges;
 }
 
-// Expose locals + auto refresh roles when changed
+// Expose locals + auto refresh roles
 app.use(async (req, res, next) => {
   res.locals.me = req.user || null;
   res.locals.avatarUrl = avatarUrl;
@@ -218,13 +217,10 @@ app.use(async (req, res, next) => {
 
   if (req.user?.id) {
     try {
-      // Keep roles fresh without forcing logout
       await syncUserRolesFromDiscord(req.user.id);
-
       res.locals.myBadges = await getUserBadges(req.user.id);
       res.locals.canAdmin = await userHasAdminAccess(req.user.id);
     } catch (e) {
-      // if bot missing intent/token, still don’t crash UI
       res.locals.myBadges = [];
       res.locals.canAdmin = false;
       console.warn("[Locals] role refresh failed:", e.message);
@@ -235,17 +231,14 @@ app.use(async (req, res, next) => {
 });
 
 // --------------------
-// Passport Discord (login only needs identify)
+// Passport Discord
 // --------------------
-console.log("[OAuth] DISCORD_CALLBACK_URL =", process.env.DISCORD_CALLBACK_URL);
-console.log("[OAuth] normalized callback =", normalizeCallbackUrl(process.env.DISCORD_CALLBACK_URL));
-
 passport.use(
   new DiscordStrategy(
     {
       clientID: process.env.DISCORD_CLIENT_ID,
       clientSecret: process.env.DISCORD_CLIENT_SECRET,
-      callbackURL: normalizeCallbackUrl(process.env.DISCORD_CALLBACK_URL),
+      callbackURL: process.env.DISCORD_CALLBACK_URL,
       scope: ["identify"],
     },
     async (accessToken, refreshToken, profile, done) => {
@@ -264,7 +257,6 @@ passport.use(
           );
         }
 
-        // roles will be synced by bot in middleware right after login
         const user = await dbGet(`SELECT * FROM users WHERE id = ?`, [profile.id]);
         return done(null, user);
       } catch (err) {
@@ -390,6 +382,15 @@ app.post("/new/:key", requireAuth, async (req, res) => {
     [cat.id, req.user.id, title, body]
   );
 
+  // ✅ LIVE: notify everyone viewing this category
+  io.to(`category:${cat.key}`).emit("post:new", {
+    id: result.lastID,
+    category_key: cat.key,
+    title,
+    author: req.user.username,
+    created_at: Math.floor(Date.now() / 1000),
+  });
+
   res.redirect(`/p/${result.lastID}`);
 });
 
@@ -404,6 +405,15 @@ app.post("/reply/:postId", requireAuth, async (req, res) => {
   if (!exists) return res.status(404).render("forbidden", { title: "Not found", message: "That post doesn’t exist." });
 
   await dbRun(`INSERT INTO replies (post_id, author_id, body) VALUES (?, ?, ?)`, [postId, req.user.id, body]);
+
+  // ✅ LIVE: notify everyone viewing this post
+  io.to(`post:${postId}`).emit("reply:new", {
+    post_id: postId,
+    body,
+    author: req.user.username,
+    created_at: Math.floor(Date.now() / 1000),
+  });
+
   res.redirect(`/p/${postId}#replies`);
 });
 
@@ -472,6 +482,4 @@ app.post("/admin/roles/delete", requireAuth, requireAdmin, async (req, res) => {
 // Start
 // --------------------
 const port = Number(process.env.PORT || 3000);
-app.listen(port, () => console.log(`ExecMarket Forum running on http://localhost:${port}`));
-
-
+server.listen(port, () => console.log(`ExecMarket Forum running on port ${port}`));
