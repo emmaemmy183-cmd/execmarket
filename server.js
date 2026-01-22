@@ -1,4 +1,4 @@
-// server.js new
+// server.js
 require("dotenv").config();
 
 const path = require("path");
@@ -9,7 +9,6 @@ const DiscordStrategy = require("passport-discord").Strategy;
 const helmet = require("helmet");
 const db = require("./db");
 
-// ✅ NEW: http server + socket.io
 const http = require("http");
 const { Server } = require("socket.io");
 
@@ -39,7 +38,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // --------------------
-// ✅ Socket.IO setup
+// Socket.IO
 // --------------------
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -77,6 +76,20 @@ function dbRun(sql, params = []) {
       else resolve(this);
     });
   });
+}
+
+// --------------------
+// Cooldown config
+// --------------------
+const POST_COOLDOWN_SECONDS = 180;
+
+async function getPostCooldownRemaining(userId) {
+  const row = await dbGet(`SELECT last_post_at FROM users WHERE id = ?`, [userId]);
+  const last = Number(row?.last_post_at || 0);
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - last;
+  if (diff >= POST_COOLDOWN_SECONDS) return 0;
+  return POST_COOLDOWN_SECONDS - diff;
 }
 
 // --------------------
@@ -160,10 +173,11 @@ async function userHasAdminAccess(userId) {
 async function requireAdmin(req, res, next) {
   if (!req.user?.id) return res.redirect("/login");
   const ok = await userHasAdminAccess(req.user.id);
-  if (!ok) return res.status(403).render("forbidden", {
-    title: "Access denied",
-    message: "This page is for staff only.",
-  });
+  if (!ok)
+    return res.status(403).render("forbidden", {
+      title: "Access denied",
+      message: "This page is for staff only.",
+    });
   next();
 }
 
@@ -185,10 +199,10 @@ function guessStyleFromName(name) {
 
 async function getUserBadges(userId) {
   const roleRows = await dbAll(`SELECT role_id FROM user_roles WHERE user_id = ?`, [userId]);
-  const roleIds = (roleRows || []).map(r => r.role_id);
+  const roleIds = (roleRows || []).map((r) => r.role_id);
 
   const overrides = await dbAll(`SELECT role_id, label, style FROM role_labels`, []);
-  const overrideMap = new Map(overrides.map(o => [o.role_id, o]));
+  const overrideMap = new Map(overrides.map((o) => [o.role_id, o]));
 
   await refreshGuildRolesCache();
 
@@ -247,7 +261,7 @@ passport.use(
 
         if (!existing) {
           await dbRun(
-            `INSERT INTO users (id, username, discriminator, avatar) VALUES (?, ?, ?, ?)`,
+            `INSERT INTO users (id, username, discriminator, avatar, last_post_at) VALUES (?, ?, ?, ?, 0)`,
             [profile.id, profile.username, profile.discriminator || null, profile.avatar || null]
           );
         } else {
@@ -281,7 +295,8 @@ passport.deserializeUser(async (id, done) => {
 // --------------------
 app.get("/login", (req, res) => res.render("index", { loginOnly: true, categories: [] }));
 app.get("/auth/discord", passport.authenticate("discord"));
-app.get("/auth/discord/callback",
+app.get(
+  "/auth/discord/callback",
   passport.authenticate("discord", { failureRedirect: "/login" }),
   (req, res) => res.redirect("/")
 );
@@ -297,7 +312,8 @@ app.get("/", async (req, res) => {
 
 app.get("/c/:key", async (req, res) => {
   const cat = await dbGet(`SELECT * FROM categories WHERE key = ?`, [req.params.key]);
-  if (!cat) return res.status(404).render("forbidden", { title: "Not found", message: "That page doesn’t exist." });
+  if (!cat)
+    return res.status(404).render("forbidden", { title: "Not found", message: "That page doesn’t exist." });
 
   const posts = await dbAll(
     `
@@ -311,7 +327,7 @@ app.get("/c/:key", async (req, res) => {
   );
 
   const out = [];
-  for (const p of (posts || [])) {
+  for (const p of posts || []) {
     const badges = await getUserBadges(p.author_id);
     out.push({ ...p, badges });
   }
@@ -321,7 +337,8 @@ app.get("/c/:key", async (req, res) => {
 
 app.get("/p/:id", async (req, res) => {
   const postId = Number(req.params.id);
-  if (!Number.isFinite(postId)) return res.status(400).render("forbidden", { title: "Bad link", message: "That link looks wrong." });
+  if (!Number.isFinite(postId))
+    return res.status(400).render("forbidden", { title: "Bad link", message: "That link looks wrong." });
 
   const post = await dbGet(
     `
@@ -350,7 +367,7 @@ app.get("/p/:id", async (req, res) => {
   );
 
   const repliesOut = [];
-  for (const r of (replies || [])) {
+  for (const r of replies || []) {
     const badges = await getUserBadges(r.author_id);
     repliesOut.push({ ...r, badges });
   }
@@ -361,7 +378,9 @@ app.get("/p/:id", async (req, res) => {
 app.get("/new/:key", requireAuth, async (req, res) => {
   const cat = await dbGet(`SELECT * FROM categories WHERE key = ?`, [req.params.key]);
   if (!cat) return res.status(404).render("forbidden", { title: "Not found", message: "That section doesn’t exist." });
-  res.render("newpost", { cat });
+
+  const remaining = await getPostCooldownRemaining(req.user.id);
+  res.render("newpost", { cat, cooldownRemaining: remaining });
 });
 
 // --------------------
@@ -371,24 +390,35 @@ app.post("/new/:key", requireAuth, async (req, res) => {
   const cat = await dbGet(`SELECT * FROM categories WHERE key = ?`, [req.params.key]);
   if (!cat) return res.status(404).render("forbidden", { title: "Not found", message: "That section doesn’t exist." });
 
+  const remaining = await getPostCooldownRemaining(req.user.id);
+  if (remaining > 0) {
+    return res
+      .status(429)
+      .render("forbidden", { title: "Cooldown", message: `Slow down 🙂 You can post again in ${remaining}s.` });
+  }
+
   const title = String(req.body.title || "").trim();
   const body = String(req.body.body || "").trim();
 
-  if (title.length < 3) return res.status(400).render("forbidden", { title: "Too short", message: "Give it a slightly longer title." });
-  if (body.length < 5) return res.status(400).render("forbidden", { title: "Too short", message: "Write a bit more detail so we can help." });
+  if (title.length < 3)
+    return res.status(400).render("forbidden", { title: "Too short", message: "Give it a slightly longer title." });
+  if (body.length < 5)
+    return res.status(400).render("forbidden", { title: "Too short", message: "Write a bit more detail so we can help." });
 
   const result = await dbRun(
     `INSERT INTO posts (category_id, author_id, title, body) VALUES (?, ?, ?, ?)`,
     [cat.id, req.user.id, title, body]
   );
 
-  // ✅ LIVE: notify everyone viewing this category
+  const now = Math.floor(Date.now() / 1000);
+  await dbRun(`UPDATE users SET last_post_at = ? WHERE id = ?`, [now, req.user.id]);
+
   io.to(`category:${cat.key}`).emit("post:new", {
     id: result.lastID,
     category_key: cat.key,
     title,
     author: req.user.username,
-    created_at: Math.floor(Date.now() / 1000),
+    created_at: now,
   });
 
   res.redirect(`/p/${result.lastID}`);
@@ -396,17 +426,21 @@ app.post("/new/:key", requireAuth, async (req, res) => {
 
 app.post("/reply/:postId", requireAuth, async (req, res) => {
   const postId = Number(req.params.postId);
-  if (!Number.isFinite(postId)) return res.status(400).render("forbidden", { title: "Bad link", message: "That link looks wrong." });
+  if (!Number.isFinite(postId))
+    return res.status(400).render("forbidden", { title: "Bad link", message: "That link looks wrong." });
 
   const body = String(req.body.body || "").trim();
   if (!body) return res.status(400).render("forbidden", { title: "Empty reply", message: "Write something first 🙂" });
 
-  const exists = await dbGet(`SELECT id FROM posts WHERE id = ?`, [postId]);
-  if (!exists) return res.status(404).render("forbidden", { title: "Not found", message: "That post doesn’t exist." });
+  const postRow = await dbGet(`SELECT id, category_id, is_closed FROM posts WHERE id = ?`, [postId]);
+  if (!postRow) return res.status(404).render("forbidden", { title: "Not found", message: "That post doesn’t exist." });
+
+  if (Number(postRow.is_closed) === 1) {
+    return res.status(403).render("forbidden", { title: "Closed", message: "This post is closed. No new replies allowed." });
+  }
 
   await dbRun(`INSERT INTO replies (post_id, author_id, body) VALUES (?, ?, ?)`, [postId, req.user.id, body]);
 
-  // ✅ LIVE: notify everyone viewing this post
   io.to(`post:${postId}`).emit("reply:new", {
     post_id: postId,
     body,
@@ -418,12 +452,56 @@ app.post("/reply/:postId", requireAuth, async (req, res) => {
 });
 
 // --------------------
+// Admin: close / reopen posts
+// --------------------
+app.post("/admin/posts/:id/close", requireAuth, requireAdmin, async (req, res) => {
+  const postId = Number(req.params.id);
+  if (!Number.isFinite(postId)) return res.status(400).render("forbidden", { title: "Bad link", message: "Bad post id." });
+
+  const post = await dbGet(
+    `SELECT p.id, p.is_closed, c.key AS category_key FROM posts p JOIN categories c ON c.id = p.category_id WHERE p.id = ?`,
+    [postId]
+  );
+  if (!post) return res.status(404).render("forbidden", { title: "Not found", message: "That post doesn’t exist." });
+
+  if (Number(post.is_closed) === 1) return res.redirect(`/p/${postId}`);
+
+  const now = Math.floor(Date.now() / 1000);
+  await dbRun(`UPDATE posts SET is_closed = 1, closed_at = ?, closed_by = ? WHERE id = ?`, [now, req.user.id, postId]);
+
+  io.to(`post:${postId}`).emit("post:closed", { post_id: postId, closed_at: now, closed_by: req.user.id });
+  io.to(`category:${post.category_key}`).emit("post:closed", { post_id: postId });
+
+  res.redirect(`/p/${postId}`);
+});
+
+app.post("/admin/posts/:id/reopen", requireAuth, requireAdmin, async (req, res) => {
+  const postId = Number(req.params.id);
+  if (!Number.isFinite(postId)) return res.status(400).render("forbidden", { title: "Bad link", message: "Bad post id." });
+
+  const post = await dbGet(
+    `SELECT p.id, p.is_closed, c.key AS category_key FROM posts p JOIN categories c ON c.id = p.category_id WHERE p.id = ?`,
+    [postId]
+  );
+  if (!post) return res.status(404).render("forbidden", { title: "Not found", message: "That post doesn’t exist." });
+
+  if (Number(post.is_closed) === 0) return res.redirect(`/p/${postId}`);
+
+  await dbRun(`UPDATE posts SET is_closed = 0, closed_at = NULL, closed_by = NULL WHERE id = ?`, [postId]);
+
+  io.to(`post:${postId}`).emit("post:reopened", { post_id: postId });
+  io.to(`category:${post.category_key}`).emit("post:reopened", { post_id: postId });
+
+  res.redirect(`/p/${postId}`);
+});
+
+// --------------------
 // Admin (role-id allowlist)
 // --------------------
 app.get("/admin", requireAuth, requireAdmin, async (req, res) => {
   const users = await dbAll(`SELECT * FROM users ORDER BY created_at DESC LIMIT 200`);
   const out = [];
-  for (const u of (users || [])) {
+  for (const u of users || []) {
     const badges = await getUserBadges(u.id);
     out.push({ ...u, badges });
   }
@@ -457,7 +535,7 @@ app.post("/admin/roles/upsert", requireAuth, requireAdmin, async (req, res) => {
   const label = String(req.body.label || "").trim();
   const style = String(req.body.style || "neutral").trim();
 
-  const allowed = ["owner","admin","mod","verified","seller","neutral"];
+  const allowed = ["owner", "admin", "mod", "verified", "seller", "neutral"];
   const finalStyle = allowed.includes(style) ? style : "neutral";
 
   if (roleId && label) {
