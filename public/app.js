@@ -1,8 +1,4 @@
 // public/app.js
-// Simple "page ready" class to trigger smoother transitions if you extend later.
-// document.documentElement.classList.add("js");
-
-// public/app.js
 (() => {
   const s = document.createElement("script");
   s.src = "/socket.io/socket.io.js";
@@ -23,6 +19,7 @@
         const a = document.createElement("a");
         a.className = "postItem lift cardAnim";
         a.href = `/p/${p.id}`;
+        a.dataset.postId = String(p.id);
         a.innerHTML = `
           <div class="postTop">
             <div class="postTitle">${escapeHtml(p.title)}</div>
@@ -35,6 +32,20 @@
           </div>
         `;
         list.prepend(a);
+      });
+
+      socket.on("post:closed", ({ post_id }) => {
+        const el = document.querySelector(`[data-post-id="${String(post_id)}"]`);
+        if (!el) return;
+        const badges = el.querySelector(".badges");
+        if (badges) badges.innerHTML = `<span class="badge role admin">Closed</span>`;
+      });
+
+      socket.on("post:reopened", ({ post_id }) => {
+        const el = document.querySelector(`[data-post-id="${String(post_id)}"]`);
+        if (!el) return;
+        const badges = el.querySelector(".badges");
+        if (badges) badges.innerHTML = ``;
       });
     }
 
@@ -57,16 +68,37 @@
             <span class="dot">•</span>
             <span class="badges"><span class="badge role neutral">New</span></span>
           </div>
-          <div class="contentBox">${escapeHtml(r.body).replaceAll("\n","<br/>")}</div>
+          <div class="contentBox">${escapeHtml(r.body).replaceAll("\n", "<br/>")}</div>
         `;
 
         list.appendChild(wrap);
         wrap.scrollIntoView({ behavior: "smooth", block: "end" });
       });
+
+      socket.on("post:closed", () => {
+        setClosedUI(true);
+      });
+
+      socket.on("post:reopened", () => {
+        setClosedUI(false);
+      });
     }
   };
 
   document.head.appendChild(s);
+
+  function setClosedUI(isClosed) {
+    document.body.dataset.postClosed = isClosed ? "1" : "0";
+
+    const banner = document.querySelector("#closedBanner");
+    if (banner) banner.style.display = isClosed ? "block" : "none";
+
+    const form = document.querySelector("#replyForm");
+    if (form) form.style.display = isClosed ? "none" : "block";
+
+    const lockedMsg = document.querySelector("#replyLockedMsg");
+    if (lockedMsg) lockedMsg.style.display = isClosed ? "block" : "none";
+  }
 
   function escapeHtml(str) {
     return String(str)
