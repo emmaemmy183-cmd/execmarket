@@ -383,9 +383,20 @@ app.get("/p/:id", requireAuth, requireAdmin, async (req, res) => {
 
 app.get("/new/:key", requireAuth, requireAdmin, async (req, res) => {
   const cat = await dbGet(`SELECT * FROM categories WHERE key = ?`, [req.params.key]);
-  if (!cat) return res.status(404).render("forbidden", { title: "Not found", message: "That section doesn’t exist." });
-  res.render("newpost", { cat });
+  if (!cat) {
+    return res.status(404).render("forbidden", { title: "Not found", message: "That section doesn’t exist." });
+  }
+
+  // cooldownRemaining (seconds) for UI
+  const POST_COOLDOWN_SEC = 180; // keep consistent with your POST route
+  const row = await dbGet(`SELECT last_post_at FROM users WHERE id = ?`, [req.user.id]);
+  const nowSec = Math.floor(Date.now() / 1000);
+  const last = Number(row?.last_post_at || 0);
+  const cooldownRemaining = Math.max(0, POST_COOLDOWN_SEC - (nowSec - last));
+
+  res.render("newpost", { cat, cooldownRemaining });
 });
+
 
 // --------------------
 // Actions
@@ -549,3 +560,4 @@ app.post("/admin/posts/:id/open", requireAuth, requireAdmin, async (req, res) =>
 // --------------------
 const port = Number(process.env.PORT || 3000);
 server.listen(port, () => console.log(`ExecMarket Forum running on port ${port}`));
+
