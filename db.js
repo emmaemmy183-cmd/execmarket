@@ -79,8 +79,8 @@ db.serialize(() => {
     if (err) return;
     if ((row?.c ?? 0) === 0) {
       const stmt = db.prepare(`INSERT INTO categories (key, name, description) VALUES (?, ?, ?)`);
-      stmt.run("feedback", "Feedback", "Share your thoughts — short and clear is perfect.");
-      stmt.run("bugs", "Bugs", "Tell us what broke. Screenshots help a lot.");
+      stmt.run("feedback", "Feedback", "Share your thoughts");
+      stmt.run("bugs", "Bugs", "Tell us what broke. ");
       stmt.run("suggestions", "Suggestions", "Ideas you want us to build next.");
       stmt.run("refunds", "Refunds", "Refund help and dispute questions.");
       stmt.finalize();
@@ -89,3 +89,4 @@ db.serialize(() => {
 });
 
 module.exports = db;
+
