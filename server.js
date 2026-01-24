@@ -41,9 +41,7 @@ app.use(passport.session());
 // Socket.IO
 // --------------------
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: true, credentials: true },
-});
+const io = new Server(server, { cors: { origin: true, credentials: true } });
 
 io.on("connection", (socket) => {
   socket.on("join:category", (key) => {
@@ -76,20 +74,6 @@ function dbRun(sql, params = []) {
       else resolve(this);
     });
   });
-}
-
-// --------------------
-// Cooldown config
-// --------------------
-const POST_COOLDOWN_SECONDS = 180;
-
-async function getPostCooldownRemaining(userId) {
-  const row = await dbGet(`SELECT last_post_at FROM users WHERE id = ?`, [userId]);
-  const last = Number(row?.last_post_at || 0);
-  const now = Math.floor(Date.now() / 1000);
-  const diff = now - last;
-  if (diff >= POST_COOLDOWN_SECONDS) return 0;
-  return POST_COOLDOWN_SECONDS - diff;
 }
 
 // --------------------
@@ -155,8 +139,30 @@ function avatarUrl(user) {
   return `https://cdn.discordapp.com/embed/avatars/${disc % 5}.png`;
 }
 
-// Admin access by role ids table
+// --------------------
+// ✅ Admin logic (ENV + DB allowlist)
+// --------------------
+function parseRoleIdList(raw) {
+  // supports: "123,456"  "123 456"  "{123}"  "[123,456]"
+  const s = String(raw || "");
+  const matches = s.match(/\d{10,30}/g) || [];
+  return new Set(matches);
+}
+
+const ADMIN_ROLE_IDS = parseRoleIdList(
+  process.env.DISCORD_ADMIN_ROLE_IDS || process.env.DISCORD_ADMIN_ROLE_ID || ""
+);
+
 async function userHasAdminAccess(userId) {
+  // 1) ENV role ids
+  if (ADMIN_ROLE_IDS.size) {
+    const roles = await dbAll(`SELECT role_id FROM user_roles WHERE user_id = ?`, [userId]);
+    for (const r of roles || []) {
+      if (ADMIN_ROLE_IDS.has(String(r.role_id))) return true;
+    }
+  }
+
+  // 2) DB allowlist
   const row = await dbGet(
     `
     SELECT 1 AS ok
@@ -173,11 +179,12 @@ async function userHasAdminAccess(userId) {
 async function requireAdmin(req, res, next) {
   if (!req.user?.id) return res.redirect("/login");
   const ok = await userHasAdminAccess(req.user.id);
-  if (!ok)
+  if (!ok) {
     return res.status(403).render("forbidden", {
       title: "Access denied",
       message: "This page is for staff only.",
     });
+  }
   next();
 }
 
@@ -261,7 +268,7 @@ passport.use(
 
         if (!existing) {
           await dbRun(
-            `INSERT INTO users (id, username, discriminator, avatar, last_post_at) VALUES (?, ?, ?, ?, 0)`,
+            `INSERT INTO users (id, username, discriminator, avatar) VALUES (?, ?, ?, ?)`,
             [profile.id, profile.username, profile.discriminator || null, profile.avatar || null]
           );
         } else {
@@ -310,10 +317,10 @@ app.get("/", async (req, res) => {
   res.render("index", { loginOnly: false, categories: categories || [] });
 });
 
-app.get("/c/:key", async (req, res) => {
+// ✅ ONLY ADMINS CAN SEE POSTS/CATEGORIES
+app.get("/c/:key", requireAuth, requireAdmin, async (req, res) => {
   const cat = await dbGet(`SELECT * FROM categories WHERE key = ?`, [req.params.key]);
-  if (!cat)
-    return res.status(404).render("forbidden", { title: "Not found", message: "That page doesn’t exist." });
+  if (!cat) return res.status(404).render("forbidden", { title: "Not found", message: "That page doesn’t exist." });
 
   const posts = await dbAll(
     `
@@ -335,10 +342,9 @@ app.get("/c/:key", async (req, res) => {
   res.render("category", { cat, posts: out });
 });
 
-app.get("/p/:id", async (req, res) => {
+app.get("/p/:id", requireAuth, requireAdmin, async (req, res) => {
   const postId = Number(req.params.id);
-  if (!Number.isFinite(postId))
-    return res.status(400).render("forbidden", { title: "Bad link", message: "That link looks wrong." });
+  if (!Number.isFinite(postId)) return res.status(400).render("forbidden", { title: "Bad link", message: "That link looks wrong." });
 
   const post = await dbGet(
     `
@@ -375,68 +381,72 @@ app.get("/p/:id", async (req, res) => {
   res.render("post", { post, replies: repliesOut });
 });
 
-app.get("/new/:key", requireAuth, async (req, res) => {
+app.get("/new/:key", requireAuth, requireAdmin, async (req, res) => {
   const cat = await dbGet(`SELECT * FROM categories WHERE key = ?`, [req.params.key]);
   if (!cat) return res.status(404).render("forbidden", { title: "Not found", message: "That section doesn’t exist." });
-
-  const remaining = await getPostCooldownRemaining(req.user.id);
-  res.render("newpost", { cat, cooldownRemaining: remaining });
+  res.render("newpost", { cat });
 });
 
 // --------------------
 // Actions
 // --------------------
-app.post("/new/:key", requireAuth, async (req, res) => {
+const POST_COOLDOWN_SEC = 180;
+
+app.post("/new/:key", requireAuth, requireAdmin, async (req, res) => {
   const cat = await dbGet(`SELECT * FROM categories WHERE key = ?`, [req.params.key]);
   if (!cat) return res.status(404).render("forbidden", { title: "Not found", message: "That section doesn’t exist." });
 
-  const remaining = await getPostCooldownRemaining(req.user.id);
-  if (remaining > 0) {
-    return res
-      .status(429)
-      .render("forbidden", { title: "Cooldown", message: `Slow down 🙂 You can post again in ${remaining}s.` });
+  // ✅ 3 min cooldown (per user)
+  const meRow = await dbGet(`SELECT last_post_at FROM users WHERE id = ?`, [req.user.id]);
+  const nowSec = Math.floor(Date.now() / 1000);
+  const last = Number(meRow?.last_post_at || 0);
+  const diff = nowSec - last;
+
+  if (last > 0 && diff < POST_COOLDOWN_SEC) {
+    const left = POST_COOLDOWN_SEC - diff;
+    return res.status(429).render("forbidden", {
+      title: "Slow down",
+      message: `Post cooldown is 3 minutes. Try again in ${left}s.`,
+    });
   }
 
   const title = String(req.body.title || "").trim();
   const body = String(req.body.body || "").trim();
 
-  if (title.length < 3)
-    return res.status(400).render("forbidden", { title: "Too short", message: "Give it a slightly longer title." });
-  if (body.length < 5)
-    return res.status(400).render("forbidden", { title: "Too short", message: "Write a bit more detail so we can help." });
+  if (title.length < 3) return res.status(400).render("forbidden", { title: "Too short", message: "Give it a slightly longer title." });
+  if (body.length < 5) return res.status(400).render("forbidden", { title: "Too short", message: "Write a bit more detail so we can help." });
 
-  const result = await dbRun(
-    `INSERT INTO posts (category_id, author_id, title, body) VALUES (?, ?, ?, ?)`,
-    [cat.id, req.user.id, title, body]
-  );
+  const result = await dbRun(`INSERT INTO posts (category_id, author_id, title, body) VALUES (?, ?, ?, ?)`, [
+    cat.id,
+    req.user.id,
+    title,
+    body,
+  ]);
 
-  const now = Math.floor(Date.now() / 1000);
-  await dbRun(`UPDATE users SET last_post_at = ? WHERE id = ?`, [now, req.user.id]);
+  await dbRun(`UPDATE users SET last_post_at = ? WHERE id = ?`, [nowSec, req.user.id]);
 
   io.to(`category:${cat.key}`).emit("post:new", {
     id: result.lastID,
     category_key: cat.key,
     title,
     author: req.user.username,
-    created_at: now,
+    created_at: nowSec,
   });
 
   res.redirect(`/p/${result.lastID}`);
 });
 
-app.post("/reply/:postId", requireAuth, async (req, res) => {
+app.post("/reply/:postId", requireAuth, requireAdmin, async (req, res) => {
   const postId = Number(req.params.postId);
-  if (!Number.isFinite(postId))
-    return res.status(400).render("forbidden", { title: "Bad link", message: "That link looks wrong." });
+  if (!Number.isFinite(postId)) return res.status(400).render("forbidden", { title: "Bad link", message: "That link looks wrong." });
 
   const body = String(req.body.body || "").trim();
   if (!body) return res.status(400).render("forbidden", { title: "Empty reply", message: "Write something first 🙂" });
 
-  const postRow = await dbGet(`SELECT id, category_id, is_closed FROM posts WHERE id = ?`, [postId]);
+  const postRow = await dbGet(`SELECT id, is_closed FROM posts WHERE id = ?`, [postId]);
   if (!postRow) return res.status(404).render("forbidden", { title: "Not found", message: "That post doesn’t exist." });
-
   if (Number(postRow.is_closed) === 1) {
-    return res.status(403).render("forbidden", { title: "Closed", message: "This post is closed. No new replies allowed." });
+    return res.status(403).render("forbidden", { title: "Closed", message: "This post is closed. No more replies." });
   }
 
   await dbRun(`INSERT INTO replies (post_id, author_id, body) VALUES (?, ?, ?)`, [postId, req.user.id, body]);
@@ -452,51 +462,7 @@ app.post("/reply/:postId", requireAuth, async (req, res) => {
 });
 
 // --------------------
-// Admin: close / reopen posts
-// --------------------
-app.post("/admin/posts/:id/close", requireAuth, requireAdmin, async (req, res) => {
-  const postId = Number(req.params.id);
-  if (!Number.isFinite(postId)) return res.status(400).render("forbidden", { title: "Bad link", message: "Bad post id." });
-
-  const post = await dbGet(
-    `SELECT p.id, p.is_closed, c.key AS category_key FROM posts p JOIN categories c ON c.id = p.category_id WHERE p.id = ?`,
-    [postId]
-  );
-  if (!post) return res.status(404).render("forbidden", { title: "Not found", message: "That post doesn’t exist." });
-
-  if (Number(post.is_closed) === 1) return res.redirect(`/p/${postId}`);
-
-  const now = Math.floor(Date.now() / 1000);
-  await dbRun(`UPDATE posts SET is_closed = 1, closed_at = ?, closed_by = ? WHERE id = ?`, [now, req.user.id, postId]);
-
-  io.to(`post:${postId}`).emit("post:closed", { post_id: postId, closed_at: now, closed_by: req.user.id });
-  io.to(`category:${post.category_key}`).emit("post:closed", { post_id: postId });
-
-  res.redirect(`/p/${postId}`);
-});
-
-app.post("/admin/posts/:id/reopen", requireAuth, requireAdmin, async (req, res) => {
-  const postId = Number(req.params.id);
-  if (!Number.isFinite(postId)) return res.status(400).render("forbidden", { title: "Bad link", message: "Bad post id." });
-
-  const post = await dbGet(
-    `SELECT p.id, p.is_closed, c.key AS category_key FROM posts p JOIN categories c ON c.id = p.category_id WHERE p.id = ?`,
-    [postId]
-  );
-  if (!post) return res.status(404).render("forbidden", { title: "Not found", message: "That post doesn’t exist." });
-
-  if (Number(post.is_closed) === 0) return res.redirect(`/p/${postId}`);
-
-  await dbRun(`UPDATE posts SET is_closed = 0, closed_at = NULL, closed_by = NULL WHERE id = ?`, [postId]);
-
-  io.to(`post:${postId}`).emit("post:reopened", { post_id: postId });
-  io.to(`category:${post.category_key}`).emit("post:reopened", { post_id: postId });
-
-  res.redirect(`/p/${postId}`);
-});
-
-// --------------------
-// Admin (role-id allowlist)
+// Admin
 // --------------------
 app.get("/admin", requireAuth, requireAdmin, async (req, res) => {
   const users = await dbAll(`SELECT * FROM users ORDER BY created_at DESC LIMIT 200`);
@@ -554,6 +520,28 @@ app.post("/admin/roles/delete", requireAuth, requireAdmin, async (req, res) => {
   const roleId = String(req.body.role_id || "").trim();
   if (roleId) await dbRun(`DELETE FROM role_labels WHERE role_id = ?`, [roleId]);
   res.redirect("/admin/roles");
+});
+
+// ✅ Close/Open posts (admins)
+app.post("/admin/posts/:id/close", requireAuth, requireAdmin, async (req, res) => {
+  const postId = Number(req.params.id);
+  if (!Number.isFinite(postId)) return res.status(400).render("forbidden", { title: "Bad link", message: "That link looks wrong." });
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  await dbRun(`UPDATE posts SET is_closed=1, closed_by=?, closed_at=? WHERE id=?`, [req.user.id, nowSec, postId]);
+
+  io.to(`post:${postId}`).emit("post:closed", { post_id: postId, is_closed: 1 });
+  res.redirect(`/p/${postId}`);
+});
+
+app.post("/admin/posts/:id/open", requireAuth, requireAdmin, async (req, res) => {
+  const postId = Number(req.params.id);
+  if (!Number.isFinite(postId)) return res.status(400).render("forbidden", { title: "Bad link", message: "That link looks wrong." });
+
+  await dbRun(`UPDATE posts SET is_closed=0, closed_by=NULL, closed_at=NULL WHERE id=?`, [postId]);
+
+  io.to(`post:${postId}`).emit("post:closed", { post_id: postId, is_closed: 0 });
+  res.redirect(`/p/${postId}`);
 });
 
 // --------------------
