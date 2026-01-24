@@ -3,18 +3,17 @@ const sqlite3 = require("sqlite3").verbose();
 const db = new sqlite3.Database("forum.db");
 
 db.serialize(() => {
+  // ---- base tables ----
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL,
       discriminator TEXT,
       avatar TEXT,
-      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+      last_post_at INTEGER NOT NULL DEFAULT 0
     )
   `);
-
-  // --- migrations (safe, ignore errors if column already exists) ---
-  db.run(`ALTER TABLE users ADD COLUMN last_post_at INTEGER NOT NULL DEFAULT 0`, () => {});
 
   db.run(`
     CREATE TABLE IF NOT EXISTS user_roles (
@@ -55,14 +54,12 @@ db.serialize(() => {
       author_id TEXT NOT NULL,
       title TEXT NOT NULL,
       body TEXT NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+      is_closed INTEGER NOT NULL DEFAULT 0,
+      closed_by TEXT,
+      closed_at INTEGER
     )
   `);
-
-  // --- migrations for post closing ---
-  db.run(`ALTER TABLE posts ADD COLUMN is_closed INTEGER NOT NULL DEFAULT 0`, () => {});
-  db.run(`ALTER TABLE posts ADD COLUMN closed_at INTEGER`, () => {});
-  db.run(`ALTER TABLE posts ADD COLUMN closed_by TEXT`, () => {});
 
   db.run(`
     CREATE TABLE IF NOT EXISTS replies (
@@ -74,13 +71,19 @@ db.serialize(() => {
     )
   `);
 
-  // seed categories once
+  // ---- safe migrations for older dbs (ignore errors) ----
+  db.run(`ALTER TABLE users ADD COLUMN last_post_at INTEGER NOT NULL DEFAULT 0`, () => {});
+  db.run(`ALTER TABLE posts ADD COLUMN is_closed INTEGER NOT NULL DEFAULT 0`, () => {});
+  db.run(`ALTER TABLE posts ADD COLUMN closed_by TEXT`, () => {});
+  db.run(`ALTER TABLE posts ADD COLUMN closed_at INTEGER`, () => {});
+
+  // ---- seed categories once ----
   db.get(`SELECT COUNT(*) AS c FROM categories`, (err, row) => {
     if (err) return;
     if ((row?.c ?? 0) === 0) {
       const stmt = db.prepare(`INSERT INTO categories (key, name, description) VALUES (?, ?, ?)`);
-      stmt.run("feedback", "Feedback", "Share your thoughts");
-      stmt.run("bugs", "Bugs", "Tell us what broke. ");
+      stmt.run("feedback", "Feedback", "Share your thoughts — short and clear is perfect.");
+      stmt.run("bugs", "Bugs", "Tell us what broke. Screenshots help a lot.");
       stmt.run("suggestions", "Suggestions", "Ideas you want us to build next.");
       stmt.run("refunds", "Refunds", "Refund help and dispute questions.");
       stmt.finalize();
@@ -89,4 +92,3 @@ db.serialize(() => {
 });
 
 module.exports = db;
-
