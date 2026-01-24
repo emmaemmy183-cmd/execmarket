@@ -2,7 +2,6 @@
 
 <script>
   document.body.dataset.postId = "<%= post.id %>";
-  document.body.dataset.postClosed = "<%= Number(post.is_closed || 0) %>";
 </script>
 
 <section class="postHeader cardAnim">
@@ -12,18 +11,34 @@
     <a href="/c/<%= encodeURIComponent(post.category_key) %>"><%= post.category_name %></a>
   </div>
 
-  <h2><%= post.title %></h2>
+  <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+    <h2 style="margin:0;"><%= post.title %></h2>
+
+    <% if (canAdmin) { %>
+      <% if (Number(post.is_closed) === 1) { %>
+        <form method="POST" action="/admin/posts/<%= post.id %>/open" style="margin:0;">
+          <button class="btn ghost" type="submit">Re-open</button>
+        </form>
+      <% } else { %>
+        <form method="POST" action="/admin/posts/<%= post.id %>/close" style="margin:0;">
+          <button class="btn" type="submit">Close post</button>
+        </form>
+      <% } %>
+    <% } %>
+  </div>
 
   <div class="authorLine">
     <span class="muted">@<%= post.username %></span>
     <span class="dot">•</span>
     <span class="muted"><%= new Date(post.created_at * 1000).toLocaleString() %></span>
+
+    <% if (Number(post.is_closed) === 1) { %>
+      <span class="dot">•</span>
+      <span class="badge role admin">Closed</span>
+    <% } %>
+
     <span class="dot">•</span>
     <span class="badges">
-      <% if (Number(post.is_closed || 0) === 1) { %>
-        <span class="badge role admin">Closed</span>
-      <% } %>
-
       <% if (post.badges && post.badges.length) { %>
         <% post.badges.slice(0,3).forEach(b => { %>
           <span class="badge role <%= b.style %>"><%= b.label %></span>
@@ -34,30 +49,6 @@
     </span>
   </div>
 
-  <% if (Number(post.is_closed || 0) === 1) { %>
-    <div id="closedBanner" class="contentBox" style="border:1px solid rgba(255,255,255,.12); margin-top:12px;">
-      <b>This post is closed.</b> No new replies are allowed.
-    </div>
-  <% } else { %>
-    <div id="closedBanner" class="contentBox" style="display:none; border:1px solid rgba(255,255,255,.12); margin-top:12px;">
-      <b>This post is closed.</b> No new replies are allowed.
-    </div>
-  <% } %>
-
-  <% if (canAdmin) { %>
-    <div class="row" style="margin-top:12px; gap:10px;">
-      <% if (Number(post.is_closed || 0) === 1) { %>
-        <form method="POST" action="/admin/posts/<%= post.id %>/reopen">
-          <button class="btn" type="submit">Reopen Post</button>
-        </form>
-      <% } else { %>
-        <form method="POST" action="/admin/posts/<%= post.id %>/close">
-          <button class="btn ghost" type="submit">Close Post</button>
-        </form>
-      <% } %>
-    </div>
-  <% } %>
-
   <article class="contentBox"><%= post.body %></article>
 </section>
 
@@ -66,7 +57,7 @@
 
   <div id="liveReplies">
     <% if (!replies || replies.length === 0) { %>
-      <div class="empty cardAnim">No replies yet. You can be the first one.</div>
+      <div class="empty cardAnim">No replies yet.</div>
     <% } %>
 
     <% (replies || []).forEach(r => { %>
@@ -92,16 +83,10 @@
   </div>
 
   <% if (me) { %>
-    <% if (Number(post.is_closed || 0) === 1) { %>
-      <div id="replyLockedMsg" class="empty cardAnim">This post is closed. No new replies.</div>
-      <form id="replyForm" class="form cardAnim" method="POST" action="/reply/<%= post.id %>" style="display:none">
-        <label>Your reply</label>
-        <textarea name="body" rows="5" placeholder="Write your reply..." required></textarea>
-        <button class="btn" type="submit">Reply</button>
-      </form>
+    <% if (Number(post.is_closed) === 1) { %>
+      <div class="empty cardAnim">This post is closed. Replies are disabled.</div>
     <% } else { %>
-      <div id="replyLockedMsg" class="empty cardAnim" style="display:none">This post is closed. No new replies.</div>
-      <form id="replyForm" class="form cardAnim" method="POST" action="/reply/<%= post.id %>">
+      <form class="form cardAnim" method="POST" action="/reply/<%= post.id %>">
         <label>Your reply</label>
         <textarea name="body" rows="5" placeholder="Write your reply..." required></textarea>
         <button class="btn" type="submit">Reply</button>
